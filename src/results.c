@@ -22,13 +22,13 @@ void write_results(timer* t, char* inputfile, int thread_count, char algorithm, 
 	strftime((char*) &datetime, 80, "%Y-%m-%d %H:%M:%S", timeinfo);
 
 	//filename
-	char filename[100];
+	char filename[200];
 	if (algorithm == 'S') {
 		sprintf((char*) &filename, "%s/%c.txt", destfolder, algorithm);
 	} else {
 		sprintf((char*) &filename, "%s/%c%i.txt", destfolder, algorithm, thread_count);
 	}
-	puts(filename);
+	//puts(filename);
 
    	//write to file
    	FILE* f = fopen(filename, "a");

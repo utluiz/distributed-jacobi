@@ -21,8 +21,10 @@ jacobi_result* jacobi_mpi(matrix *m, bool verbose, int process_num, int process_
 		counts[i] = qtd + 2;
 		if (i == 0) {
 			disps[i] = 0;
+			//if (process_num == 0) printf("disp[%i] = 0\n", i);
 		} else {
 			disps[i] = disps[i - 1] + counts[i - 1];
+			//if (process_num == 0) printf("disp[%i] = %i\n", i, disps[i]);
 		}
 		if (i == resto - 1) qtd--;
 	}
@@ -30,11 +32,12 @@ jacobi_result* jacobi_mpi(matrix *m, bool verbose, int process_num, int process_
 	//initial and final position
 	qtd = ceil((double) m->size / process_count);
 	int initial_line;
-	if (resto > 0 && process_num >= resto - 1) {
+	if (resto > 0 && process_num > resto - 1) {
 		initial_line = qtd * resto + (qtd - 1) * (process_num - resto);
 		qtd--;
 	} else {
 		initial_line = qtd * process_num;
+
 	}
 	int end_line = initial_line + qtd - 1;
 
@@ -72,7 +75,7 @@ jacobi_result* jacobi_mpi(matrix *m, bool verbose, int process_num, int process_
 
 	//initial position
 	for (i = 0; i < m->size; i++) {
-		x0[i] = 1;
+		x0[i] = 1.0;
 	}
 
 	//main loop
@@ -81,19 +84,40 @@ jacobi_result* jacobi_mpi(matrix *m, bool verbose, int process_num, int process_
 		shared[n1] = 0;
 		shared[n2] = 0;
 		for (i = initial_line, z = disps[process_num]; i <= end_line; i++, z++) {
-			soma = 0;
-			for (j = 0; j < m->size; j++) {
-				if (j != i) {
-					soma += m->a[i][j] * x0[j];
-				}
-			}
-			printf("Process %i: linha = %i, soma = %f\n", process_num, i, soma);
-			shared[z] = (m->b[i] - soma) / m->a[i][i];
-			x2 = shared[z] - x0[i];
 
-			//partial error
-			shared[n1] += x2 * x2;
-			shared[n2] += shared[z] * shared[z];
+			soma = 0;
+			item_matrix *item = m->a[i];
+			if (item) {
+				double diagonal_value = 0;
+				while (item->column >= 0) {
+					j = item->column;
+					if (j != i) {
+						soma += item->value * x0[j];
+					} else {
+						diagonal_value = item->value;
+					}
+					item++;
+
+				}
+
+				if (verbose) printf("Process %i: linha = %i, soma = %f\n", process_num, i, soma);
+				if (diagonal_value == 0) {
+					puts("nok");
+					MPI_Finalize();
+					exit(1);
+				}
+				shared[z] = (m->b[i] - soma) / diagonal_value;
+				x2 = shared[z] - x0[i];
+
+				//partial error
+				shared[n1] += x2 * x2;
+				shared[n2] += shared[z] * shared[z];
+			} else {
+				puts("nokx");
+				MPI_Finalize();
+				exit(0);
+			}
+
 		}
 
 		///receive/send all: n1, n2, x
@@ -142,7 +166,7 @@ jacobi_result* jacobi_mpi(matrix *m, bool verbose, int process_num, int process_
 				}
 			}
 		}
-		if (process_num == 0) {
+		if (verbose && process_num == 0) {
 			printf("\nx0 = ");
 			for (i = 0; i < m->size; i++) {
 				printf("%f, ", x0[i]);
